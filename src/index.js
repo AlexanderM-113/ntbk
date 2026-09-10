@@ -1288,7 +1288,7 @@ async function unlockEntry(request, env, entryId, corsHeaders) {
        WHERE id = ?`
     ).bind(admin_user_id, new Date().toISOString(), new Date().toISOString(), entryId).run();
     
-    return new Response(JSON.stringify({ success: true, entry_id }), {
+    return new Response(JSON.stringify({ success: true, entry_id: entryId }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', ...corsHeaders }
     });
@@ -1932,7 +1932,7 @@ async function sendEmailNotification(request, env, corsHeaders) {
        VALUES (?, ?, ?, ?, ?, ?, ?)`
     ).bind(notificationId, user_id, email_type, subject, emailBody, new Date().toISOString(), 'sent').run();
     
-    return new Response(JSON.stringify({ success: true, notification_id }), {
+    return new Response(JSON.stringify({ success: true, notification_id: notificationId }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', ...corsHeaders }
     });
@@ -2008,7 +2008,7 @@ async function processReminders(env, corsHeaders) {
           ).run();
         }
       } catch (error) {
-        console.error('Failed to send reminder:', error);
+        // Silent failure for reminders - will be retried next run
       }
     }
     
@@ -2039,7 +2039,29 @@ export default {
     
     try {
       // Route based on path
-      if (path.startsWith('/api/auth')) {
+      if (path === '/' || path === '') {
+        // Root route - return helpful information
+        return new Response(JSON.stringify({
+          message: 'Notebook Writer API',
+          version: '1.0.0',
+          endpoints: {
+            admin: '/admin.html',
+            user: '/user.html',
+            api: {
+              auth: '/api/auth/login',
+              admin: '/api/admin/*',
+              user: '/api/user/*',
+              files: '/api/files/*',
+              pdf: '/api/pdf/*',
+              email: '/api/email/*'
+            }
+          },
+          note: 'Please access the admin interface at /admin.html or user interface at /user.html'
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      } else if (path.startsWith('/api/auth')) {
         return handleAuthRoutes(request, env, corsHeaders);
       } else if (path.startsWith('/api/admin')) {
         return handleAdminRoutes(request, env, corsHeaders);
@@ -2051,8 +2073,21 @@ export default {
         return handlePdfRoutes(request, env, corsHeaders);
       } else if (path.startsWith('/api/email')) {
         return handleEmailRoutes(request, env, corsHeaders);
+      } else if (path.endsWith('.html')) {
+        // Serve static HTML files if you're hosting them through the worker
+        // For now, return a message directing to Pages
+        return new Response(JSON.stringify({
+          error: 'Static files should be served through Cloudflare Pages',
+          message: 'Please deploy the frontend to Cloudflare Pages and access the HTML files there'
+        }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
       } else {
-        return new Response('Not Found', { status: 404, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: 'Not Found' }), { 
+          status: 404, 
+          headers: { 'Content-Type': 'application/json', ...corsHeaders } 
+        });
       }
     } catch (error) {
       return new Response(JSON.stringify({ error: error.message }), {

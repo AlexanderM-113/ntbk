@@ -47,6 +47,7 @@ This guide will help you set up the entire Notebook Writer system using the Clou
 3. Copy the entire contents of `src/index.js` from your project
 4. Paste it into the editor
 5. Click **Deploy** to save your changes
+6. Test the worker by visiting its URL - you should see a JSON response with API information
 
 ### Step 4: Get Your Worker URL
 1. After deployment, you'll see your worker's URL
