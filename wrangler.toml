@@ -1,0 +1,25 @@
+name = "notebook-writer"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# Environment variables
+[vars]
+API_TIMEOUT = "30000"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "notebook-writer"
+database_id = "your-database-id-here"  # Replace with actual ID after creation
+
+# R2 Object Storage
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "notebook-writer-storage"
+jurisdiction = "us"  # Change to your preferred jurisdiction
+
+# Secrets (set via: wrangler secret put RESEND_API_KEY)
+# RESEND_API_KEY = "your-resend-api-key-here"
+
+# Pages integration (optional - for static frontend)
+# pages_build_output_dir = "public"

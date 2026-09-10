@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notebook Entry</title>
+  <link rel="stylesheet" href="/src/css/common.css">
+  <link rel="stylesheet" href="/src/css/user.css">
+  <link rel="stylesheet" href="/src/css/responsive.css">
+</head>
+<body>
+  <div id="app" class="user-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <h1 id="notebookTitle">Notebook Writer</h1>
+      </div>
+      <div class="header-right">
+        <span id="userName"></span>
+        <button id="logoutBtn" class="btn btn-secondary">Logout</button>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="content">
+      <!-- Login Page -->
+      <section id="login-page" class="page active">
+        <div class="login-container">
+          <h2>Welcome</h2>
+          <p>Enter your first name to begin</p>
+          <form id="login-form">
+            <div class="form-group">
+              <input 
+                type="text" 
+                id="firstNameInput" 
+                placeholder="Your first name" 
+                required
+                autocomplete="off"
+              >
+            </div>
+            <button type="submit" class="btn btn-primary">Enter</button>
+          </form>
+          <div id="loginError" class="error-message"></div>
+        </div>
+      </section>
+
+      <!-- Dashboard Page -->
+      <section id="dashboard-page" class="page">
+        <h2>Hello, <span id="dashboardUserName"></span>!</h2>
+        <p>Your assigned pages are ready</p>
+        <div id="pages-list" class="pages-grid"></div>
+        <div id="completion-status"></div>
+      </section>
+
+      <!-- Page Entry Form -->
+      <section id="entry-page" class="page">
+        <div class="entry-header">
+          <h2 id="pageTitle"></h2>
+          <p id="pageInfo"></p>
+        </div>
+
+        <form id="entry-form" class="entry-form">
+          <div id="form-fields"></div>
+
+          <!-- Signature Section -->
+          <div class="signature-section">
+            <h3>Sign this page</h3>
+            <p>Sign below using your mouse or touch</p>
+            <canvas id="signature-pad" width="600" height="200"></canvas>
+            <div class="signature-buttons">
+              <button type="button" class="btn btn-secondary" id="clearSignatureBtn">
+                Clear Signature
+              </button>
+              <button type="button" class="btn btn-primary" id="confirmSignatureBtn">
+                Confirm Signature
+              </button>
+            </div>
+            <p id="signatureStatus"></p>
+          </div>
+
+          <!-- Submit Buttons -->
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" id="backBtn">
+              Back to Dashboard
+            </button>
+            <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
+              Submit Page
+            </button>
+          </div>
+        </form>
+
+        <div id="formError" class="error-message"></div>
+      </section>
+
+      <!-- Success Page -->
+      <section id="success-page" class="page">
+        <div class="success-container">
+          <h2>✓ Page Completed Successfully!</h2>
+          <p id="successMessage"></p>
+          <button class="btn btn-primary" id="nextPageBtn">
+            Continue to Next Page
+          </button>
+          <button class="btn btn-secondary" id="dashboardBtn">
+            Return to Dashboard
+          </button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/src/js/config.js"></script>
+  <script src="/src/js/api-client.js"></script>
+  <script src="/src/js/utils/validation.js"></script>
+  <script src="/src/js/utils/dom.js"></script>
+  <script src="/src/js/utils/storage.js"></script>
+  <script src="/src/js/user/login.js"></script>
+  <script src="/src/js/user/dashboard.js"></script>
+  <script src="/src/js/user/page-entry.js"></script>
+  <script src="/src/js/user/signature-pad.js"></script>
+  <script src="/src/js/user/index.js"></script>
+</body>
+</html>

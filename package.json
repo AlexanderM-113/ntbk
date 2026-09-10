@@ -1,0 +1,27 @@
+{
+  "name": "notebook-writer",
+  "version": "1.0.0",
+  "description": "A dual-interface system for managing customizable digital notebooks",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler publish",
+    "d1:create": "wrangler d1 create notebook-writer",
+    "d1:migrate": "wrangler d1 execute notebook-writer --file ./migrations/001_create_initial_schema.sql",
+    "d1:backup": "wrangler d1 export notebook-writer --output=backup.sql"
+  },
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "notebook",
+    "forms"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1"
+  }
+}

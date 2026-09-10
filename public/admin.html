@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notebook Writer - Admin</title>
+  <link rel="stylesheet" href="/src/css/common.css">
+  <link rel="stylesheet" href="/src/css/admin.css">
+  <link rel="stylesheet" href="/src/css/responsive.css">
+</head>
+<body>
+  <div id="app" class="admin-container">
+    <!-- Admin Login Screen -->
+    <div id="admin-login" class="login-screen">
+      <div class="login-container">
+        <h1>Admin Login</h1>
+        <form id="admin-login-form">
+          <div class="form-group">
+            <label for="adminUsername">Username</label>
+            <input type="text" id="adminUsername" required>
+          </div>
+          <div class="form-group">
+            <label for="adminPassword">Password</label>
+            <input type="password" id="adminPassword" required>
+          </div>
+          <button type="submit" class="btn btn-primary">Login</button>
+        </form>
+        <div id="loginError" class="error-message"></div>
+      </div>
+    </div>
+
+    <!-- Admin Dashboard -->
+    <div id="admin-dashboard" class="dashboard hidden">
+      <!-- Header -->
+      <header class="header">
+        <div class="header-left">
+          <h1>Notebook Writer</h1>
+        </div>
+        <div class="header-right">
+          <span id="adminName"></span>
+          <button id="logoutBtn" class="btn btn-secondary">Logout</button>
+        </div>
+      </header>
+
+      <!-- Main Navigation -->
+      <nav class="main-nav">
+        <button class="nav-btn active" data-page="dashboard">Dashboard</button>
+        <button class="nav-btn" data-page="notebooks">Notebooks</button>
+        <button class="nav-btn" data-page="schedule">Schedule</button>
+        <button class="nav-btn" data-page="groups">Groups & Users</button>
+        <button class="nav-btn" data-page="entries">Entries</button>
+        <button class="nav-btn" data-page="audit">Audit Log</button>
+        <button class="nav-btn" data-page="settings">Settings</button>
+      </nav>
+
+      <!-- Content Area -->
+      <main class="content">
+        <!-- Dashboard Page -->
+        <section id="dashboard-page" class="page active">
+          <h2>Dashboard</h2>
+          <div class="dashboard-grid">
+            <!-- Notebook cards -->
+            <div id="notebook-cards"></div>
+            <!-- Statistics -->
+            <div id="statistics"></div>
+          </div>
+        </section>
+
+        <!-- Notebooks Page -->
+        <section id="notebooks-page" class="page">
+          <h2>Notebooks</h2>
+          <button id="createNotebookBtn" class="btn btn-primary">Create New Notebook</button>
+          <div id="notebooks-list"></div>
+        </section>
+
+        <!-- Notebook Editor -->
+        <section id="notebook-editor" class="page">
+          <div class="editor-header">
+            <h2 id="editor-title">Edit Notebook</h2>
+            <button id="backToNotebooksBtn" class="btn btn-secondary">Back to Notebooks</button>
+          </div>
+          <div class="editor-container">
+            <!-- Left sidebar: Pages -->
+            <aside class="editor-sidebar">
+              <div class="sidebar-header">
+                <h3>Pages</h3>
+                <button id="addPageBtn" class="btn btn-small btn-primary">+ Add Page</button>
+              </div>
+              <div id="pages-list"></div>
+            </aside>
+            <!-- Center: Page editor -->
+            <main class="editor-main">
+              <div id="page-editor">
+                <p class="placeholder-text">Select a page to edit</p>
+              </div>
+            </main>
+            <!-- Right: Preview -->
+            <aside class="editor-preview">
+              <div class="preview-header">
+                <h3>Preview</h3>
+              </div>
+              <div id="page-preview">
+                <p class="placeholder-text">Preview will appear here</p>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <!-- Schedule Page -->
+        <section id="schedule-page" class="page">
+          <h2>Schedule</h2>
+          <div class="schedule-controls">
+            <button id="createScheduleBtn" class="btn btn-primary">Create Schedule Assignment</button>
+            <button id="processRemindersBtn" class="btn btn-secondary">Process Reminders</button>
+          </div>
+          <div id="schedule-list"></div>
+        </section>
+
+        <!-- Groups & Users Page -->
+        <section id="groups-page" class="page">
+          <h2>Groups & Users</h2>
+          <div class="groups-controls">
+            <button id="createGroupBtn" class="btn btn-primary">Create Group</button>
+            <button id="createUserBtn" class="btn btn-secondary">Add User</button>
+          </div>
+          <div id="groups-content"></div>
+        </section>
+
+        <!-- Entries Page -->
+        <section id="entries-page" class="page">
+          <h2>Entries</h2>
+          <div id="entries-filters">
+            <select id="notebookFilter">
+              <option value="">All Notebooks</option>
+            </select>
+          </div>
+          <div id="entries-list"></div>
+        </section>
+
+        <!-- Audit Log Page -->
+        <section id="audit-page" class="page">
+          <h2>Audit Log</h2>
+          <div id="audit-filters"></div>
+          <div id="audit-log-list"></div>
+        </section>
+
+        <!-- Settings Page -->
+        <section id="settings-page" class="page">
+          <h2>Settings</h2>
+          <div id="settings-form"></div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- Modals -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div id="modal-content" class="modal-content"></div>
+  </div>
+
+  <script src="/src/js/config.js"></script>
+  <script src="/src/js/api-client.js"></script>
+  <script src="/src/js/utils/validation.js"></script>
+  <script src="/src/js/utils/dom.js"></script>
+  <script src="/src/js/utils/storage.js"></script>
+  <script src="/src/js/admin/dashboard.js"></script>
+  <script src="/src/js/admin/notebook-editor.js"></script>
+  <script src="/src/js/admin/schedule-manager.js"></script>
+  <script src="/src/js/admin/entries-manager.js"></script>
+  <script src="/src/js/admin/group-manager.js"></script>
+  <script src="/src/js/admin/audit-log.js"></script>
+  <script src="/src/js/admin/auth.js"></script>
+  <script src="/src/js/admin/index.js"></script>
+</body>
+</html>
