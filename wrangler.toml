@@ -7,16 +7,34 @@ compatibility_date = "2024-01-01"
 API_TIMEOUT = "30000"
 
 # D1 Database
+name = "ntbk"
+main = "src/worker.js"
+compatibility_date = "2024-01-01"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "notebook_db"
 database_id = "3c5963e7-e019-40ba-80af-d4a6edc6506b"
 
-# R2 Object Storage
 [[r2_buckets]]
-binding = "BUCKET"
-bucket_name = "notebook-writer-storage"
-jurisdiction = "us"  # Change to your preferred jurisdiction
+binding = "COVERS"
+bucket_name = "notebook-covers"
+
+[[r2_buckets]]
+binding = "BACKGROUNDS"
+bucket_name = "page-backgrounds"
+
+[[r2_buckets]]
+binding = "ENTRY_IMAGES"
+bucket_name = "entry-images"
+
+[[r2_buckets]]
+binding = "SIGNATURES"
+bucket_name = "signatures"
+
+[[r2_buckets]]
+binding = "EXPORTS"
+bucket_name = "exports"
 
 # Secrets (set via: wrangler secret put RESEND_API_KEY)
 # RESEND_API_KEY = "your-resend-api-key-here"
