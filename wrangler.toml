@@ -9,8 +9,8 @@ API_TIMEOUT = "30000"
 # D1 Database
 [[d1_databases]]
 binding = "DB"
-database_name = "notebook-writer"
-# database_id will be set automatically by Cloudflare during deployment
+database_name = "notebook_db"
+database_id = "3c5963e7-e019-40ba-80af-d4a6edc6506b"
 
 # R2 Object Storage
 [[r2_buckets]]
