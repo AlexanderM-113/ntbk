@@ -1834,6 +1834,8 @@ export default {
           200,
           corsHeaders
         );
+      } else if (path === '/api/health') {
+        return json({ success: true, status: 'ok', time: new Date().toISOString() }, 200, corsHeaders);
       } else if (path.startsWith('/api/auth')) {
         return handleAuthRoutes(request, env, corsHeaders);
       } else if (path.startsWith('/api/admin')) {
