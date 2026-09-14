@@ -25,8 +25,14 @@ class APIClient {
       const response = await fetch(url, config);
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'API Error');
+        let errorMessage = 'API Error';
+        try {
+          const error = await response.json();
+          errorMessage = error.error || error.message || errorMessage;
+        } catch (e) {
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
 
       if (response.headers.get('content-type')?.includes('application/json')) {
@@ -174,6 +180,19 @@ class APIClient {
     return this.request(`/api/admin/groups/${groupId}/users`);
   }
 
+  updateGroup(groupId, data) {
+    return this.request(`/api/admin/groups/${groupId}`, {
+      method: 'PUT',
+      body: data,
+    });
+  }
+
+  deleteGroup(groupId) {
+    return this.request(`/api/admin/groups/${groupId}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Users
   getUsers() {
     return this.request('/api/admin/users');
@@ -190,6 +209,19 @@ class APIClient {
     return this.request('/api/admin/users/assign-pages', {
       method: 'POST',
       body: data,
+    });
+  }
+
+  updateUser(userId, data) {
+    return this.request(`/api/admin/users/${userId}`, {
+      method: 'PUT',
+      body: data,
+    });
+  }
+
+  deleteUser(userId) {
+    return this.request(`/api/admin/users/${userId}`, {
+      method: 'DELETE',
     });
   }
 
@@ -249,6 +281,11 @@ class APIClient {
   // Statistics
   getStatistics() {
     return this.request('/api/admin/statistics');
+  }
+
+  // Audit Log
+  getAuditLog() {
+    return this.request('/api/admin/audit-log');
   }
 
   // User endpoints

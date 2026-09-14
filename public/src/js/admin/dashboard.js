@@ -7,6 +7,179 @@ class AdminDashboard {
   async init() {
     await this.loadNotebooks();
     await this.loadStatistics();
+    this.setupNotebookControls();
+  }
+
+  setupNotebookControls() {
+    const createButton = document.getElementById('createNotebookBtn');
+    if (createButton && !createButton.dataset.bound) {
+      createButton.dataset.bound = 'true';
+      createButton.addEventListener('click', () => this.showCreateNotebookModal());
+    }
+  }
+
+  showCreateNotebookModal() {
+    const modal = document.getElementById('modal-content');
+    const overlay = document.getElementById('modal-overlay');
+    if (!modal || !overlay) return;
+
+    modal.innerHTML = `
+      <div class="modal-header">
+        <h3 class="modal-title">Create Notebook</h3>
+        <button class="modal-close" type="button">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="notebookTitle">Title</label>
+          <input type="text" id="notebookTitle" required>
+        </div>
+        <div class="form-group">
+          <label for="notebookDescription">Description</label>
+          <textarea id="notebookDescription" rows="3"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary modal-cancel" type="button">Cancel</button>
+        <button class="btn btn-primary modal-confirm" type="button">Create</button>
+      </div>
+    `;
+
+    showElement(overlay);
+    const close = () => hideElement(overlay);
+    modal.querySelector('.modal-close').addEventListener('click', close);
+    modal.querySelector('.modal-cancel').addEventListener('click', close);
+    modal.querySelector('.modal-confirm').addEventListener('click', () => this.createNotebook(close));
+  }
+
+  async createNotebook(close) {
+    const title = document.getElementById('notebookTitle').value.trim();
+    if (!title) {
+      this.showError('Notebook title is required');
+      return;
+    }
+
+    try {
+      const notebook = await this.apiClient.createNotebook({
+        title,
+        description: document.getElementById('notebookDescription').value.trim(),
+        type: 'standard'
+      });
+      close();
+      this.showSuccess('Notebook created successfully');
+      await this.loadNotebooks();
+      this.showCoverDesigner(notebook);
+    } catch (error) {
+      console.error('Create notebook error:', error);
+      this.showError('Failed to create notebook');
+    }
+  }
+
+  showCoverDesigner(notebook) {
+    const modal = document.getElementById('modal-content');
+    const overlay = document.getElementById('modal-overlay');
+    if (!modal || !overlay) return;
+
+    const coverTitle = notebook.cover_title || notebook.title;
+    const coverSubtitle = notebook.cover_subtitle || notebook.description || '';
+    let coverLogoId = notebook.cover_logo_id || '';
+    let coverLogoUrl = notebook.cover_logo_id ? `${this.apiClient.baseURL}/api/files/${encodeURIComponent(notebook.cover_logo_id)}` : '';
+    modal.innerHTML = `
+      <div class="modal-header">
+        <h3 class="modal-title">Design Your Cover</h3>
+        <button class="modal-close" type="button">&times;</button>
+      </div>
+      <div class="cover-designer">
+        <div class="cover-controls">
+          <div class="form-group">
+            <label for="coverLogo">Logo above title</label>
+            <input id="coverLogo" type="file" accept="image/png,image/jpeg">
+            <small class="text-muted">PNG or JPG</small>
+          </div>
+          <div class="form-group">
+            <label for="coverTitle">Cover Title</label>
+            <input id="coverTitle" value="${this.escapeHtml(coverTitle)}">
+          </div>
+          <div class="form-group">
+            <label for="coverSubtitle">Subtitle</label>
+            <textarea id="coverSubtitle" rows="3">${this.escapeHtml(coverSubtitle)}</textarea>
+          </div>
+          <div class="form-group">
+            <label for="coverBackground">Background</label>
+            <input id="coverBackground" type="color" value="${notebook.cover_background_color || '#17324d'}">
+          </div>
+          <div class="form-group">
+            <label for="coverTextColor">Text Color</label>
+            <input id="coverTextColor" type="color" value="${notebook.cover_text_color || '#ffffff'}">
+          </div>
+          <div class="form-group">
+            <label for="coverFont">Font</label>
+            <select id="coverFont">
+              <option value="Georgia">Georgia</option>
+              <option value="Arial">Arial</option>
+              <option value="Verdana">Verdana</option>
+              <option value="Trebuchet MS">Trebuchet MS</option>
+            </select>
+          </div>
+        </div>
+        <div id="coverPreview" class="cover-preview"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary cover-skip" type="button">Skip for now</button>
+        <button class="btn btn-primary cover-save" type="button">Save Cover & Continue</button>
+      </div>
+    `;
+
+    showElement(overlay);
+    const close = () => hideElement(overlay);
+    const updatePreview = () => {
+      const preview = document.getElementById('coverPreview');
+      preview.style.backgroundColor = document.getElementById('coverBackground').value;
+      preview.style.color = document.getElementById('coverTextColor').value;
+      preview.style.fontFamily = document.getElementById('coverFont').value;
+      preview.innerHTML = `${coverLogoUrl ? `<img src="${this.escapeHtml(coverLogoUrl)}" alt="Cover logo">` : ''}<strong>${this.escapeHtml(document.getElementById('coverTitle').value)}</strong><span>${this.escapeHtml(document.getElementById('coverSubtitle').value)}</span>`;
+    };
+    modal.querySelector('.modal-close').addEventListener('click', close);
+    modal.querySelector('.cover-skip').addEventListener('click', () => {
+      close();
+      this.navigateToNotebookEditor(notebook.id);
+    });
+    modal.querySelector('.cover-save').addEventListener('click', async () => {
+      try {
+        await this.apiClient.updateNotebook(notebook.id, {
+          title: notebook.title,
+          cover_title: document.getElementById('coverTitle').value.trim(),
+          cover_subtitle: document.getElementById('coverSubtitle').value.trim(),
+          cover_logo_id: coverLogoId || undefined,
+          cover_background_color: document.getElementById('coverBackground').value,
+          cover_text_color: document.getElementById('coverTextColor').value,
+          global_font_family: document.getElementById('coverFont').value
+        });
+        close();
+        this.showSuccess('Cover saved successfully');
+        this.navigateToNotebookEditor(notebook.id);
+      } catch (error) {
+        console.error('Cover save error:', error);
+        this.showError('Failed to save cover');
+      }
+    });
+    document.getElementById('coverLogo').addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      try {
+        const uploaded = await this.apiClient.uploadFile(file, 'covers');
+        coverLogoId = uploaded.file_id;
+        coverLogoUrl = uploaded.url;
+        updatePreview();
+      } catch (error) {
+        console.error('Cover logo upload error:', error);
+        this.showError('Failed to upload cover logo');
+      }
+    });
+    modal.querySelectorAll('input, textarea, select').forEach((control) => {
+      control.addEventListener('input', updatePreview);
+      control.addEventListener('change', updatePreview);
+    });
+    updatePreview();
   }
 
   async loadNotebooks() {
@@ -66,6 +239,28 @@ class AdminDashboard {
         this.handleNotebookAction(button.dataset.action, button.dataset.id);
       }
     });
+  }
+
+  async loadNotebooksPage() {
+    try {
+      const notebooks = await this.apiClient.getNotebooks();
+      const container = document.getElementById('notebooks-list');
+      if (!container) return;
+      container.innerHTML = notebooks.map(notebook => `
+        <div class="notebook-card">
+          <h3>${this.escapeHtml(notebook.title)}</h3>
+          <p>${this.escapeHtml(notebook.description || 'No description')}</p>
+          <button class="btn btn-small btn-primary" data-action="edit" data-id="${notebook.id}">Edit</button>
+        </div>
+      `).join('') || '<p class="text-muted">No notebooks created yet.</p>';
+      container.onclick = (event) => {
+        const button = event.target.closest('[data-action="edit"]');
+        if (button) this.navigateToNotebookEditor(button.dataset.id);
+      };
+    } catch (error) {
+      console.error('Error loading notebooks page:', error);
+      this.showError('Failed to load notebooks');
+    }
   }
 
   handleNotebookAction(action, notebookId) {
@@ -172,6 +367,10 @@ class AdminDashboard {
     if (navButton) {
       navButton.classList.add('active');
     }
+
+    if (pageId === 'notebooks') {
+      this.loadNotebooksPage();
+    }
   }
 
   showSuccess(message) {
@@ -192,22 +391,6 @@ class AdminDashboard {
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
     notification.textContent = message;
-    notification.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      padding: 15px 20px;
-      border-radius: 4px;
-      color: white;
-      z-index: 10000;
-      animation: slideIn 0.3s ease;
-    `;
-
-    if (type === 'success') {
-      notification.style.backgroundColor = '#28a745';
-    } else {
-      notification.style.backgroundColor = '#dc3545';
-    }
 
     document.body.appendChild(notification);
 

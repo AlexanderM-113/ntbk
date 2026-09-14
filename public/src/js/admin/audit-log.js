@@ -12,9 +12,7 @@ class AuditLog {
 
   async loadAuditLogs() {
     try {
-      // This would need an API endpoint to fetch audit logs
-      // For now, using placeholder data
-      this.auditLogs = [];
+      this.auditLogs = await this.apiClient.getAuditLog();
       this.renderAuditLogs();
     } catch (error) {
       console.error('Error loading audit logs:', error);

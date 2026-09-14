@@ -59,6 +59,12 @@ function initializePage(pageName) {
         adminDashboard.init();
       }
       break;
+    case 'notebooks':
+      if (adminDashboard) {
+        adminDashboard.setupNotebookControls();
+        adminDashboard.loadNotebooksPage();
+      }
+      break;
     case 'schedule':
       if (scheduleManager) {
         scheduleManager.init();

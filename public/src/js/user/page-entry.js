@@ -223,6 +223,11 @@ class PageEntry {
     const submitBtn = document.getElementById('submitBtn');
     const backBtn = document.getElementById('backBtn');
 
+    // Enable submit button by default (will be disabled if signature required)
+    if (submitBtn) {
+      submitBtn.disabled = !this.currentPage.requires_signature;
+    }
+
     // Remove existing listeners
     const newForm = form.cloneNode(true);
     form.parentNode.replaceChild(newForm, form);

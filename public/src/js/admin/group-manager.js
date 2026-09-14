@@ -136,11 +136,19 @@ class GroupManager {
     }
   }
 
-  showGroupModal(group = null) {
+  async showGroupModal(group = null) {
     const modal = document.getElementById('modal-content');
     const overlay = document.getElementById('modal-overlay');
     
     const isEdit = !!group;
+    
+    // Load notebooks for dropdown
+    let notebooks = [];
+    try {
+      notebooks = await this.apiClient.getNotebooks();
+    } catch (error) {
+      console.error('Error loading notebooks:', error);
+    }
     
     modal.innerHTML = `
       <div class="modal-header">
@@ -162,7 +170,11 @@ class GroupManager {
           <label for="groupNotebook">Associated Notebook (Optional)</label>
           <select id="groupNotebook">
             <option value="">No notebook</option>
-            <!-- Notebooks would be loaded here -->
+            ${notebooks.map(notebook => `
+              <option value="${notebook.id}" ${group?.notebook_id === notebook.id ? 'selected' : ''}>
+                ${this.escapeHtml(notebook.title)}
+              </option>
+            `).join('')}
           </select>
         </div>
       </div>
@@ -224,7 +236,10 @@ class GroupManager {
         return;
       }
 
-      // Update group (would need API endpoint)
+      await this.apiClient.updateGroup(groupId, {
+        name,
+        description
+      });
       adminDashboard.showSuccess('Group updated successfully');
       hideElement(document.getElementById('modal-overlay'));
       this.loadGroups();
@@ -238,7 +253,7 @@ class GroupManager {
   async deleteGroup(groupId) {
     if (confirm('Are you sure you want to delete this group? This will also delete all users in the group.')) {
       try {
-        // Delete group (would need API endpoint)
+        await this.apiClient.deleteGroup(groupId);
         adminDashboard.showSuccess('Group deleted successfully');
         this.loadGroups();
       } catch (error) {
@@ -259,11 +274,19 @@ class GroupManager {
     }
   }
 
-  showUserModal(user = null) {
+  async showUserModal(user = null) {
     const modal = document.getElementById('modal-content');
     const overlay = document.getElementById('modal-overlay');
     
     const isEdit = !!user;
+    
+    // Load notebooks for dropdown
+    let notebooks = [];
+    try {
+      notebooks = await this.apiClient.getNotebooks();
+    } catch (error) {
+      console.error('Error loading notebooks:', error);
+    }
     
     modal.innerHTML = `
       <div class="modal-header">
@@ -302,7 +325,11 @@ class GroupManager {
           <label for="userNotebook">Notebook *</label>
           <select id="userNotebook" required>
             <option value="">Select a notebook</option>
-            <!-- Notebooks would be loaded here -->
+            ${notebooks.map(notebook => `
+              <option value="${notebook.id}" ${user?.notebook_id === notebook.id ? 'selected' : ''}>
+                ${this.escapeHtml(notebook.title)}
+              </option>
+            `).join('')}
           </select>
         </div>
       </div>
@@ -370,7 +397,11 @@ class GroupManager {
         return;
       }
 
-      // Update user (would need API endpoint)
+      await this.apiClient.updateUser(userId, {
+        first_name: firstName,
+        full_name: fullName,
+        email: email
+      });
       adminDashboard.showSuccess('User updated successfully');
       hideElement(document.getElementById('modal-overlay'));
       this.loadUsers();
@@ -384,7 +415,7 @@ class GroupManager {
   async deleteUser(userId) {
     if (confirm('Are you sure you want to delete this user?')) {
       try {
-        // Delete user (would need API endpoint)
+        await this.apiClient.deleteUser(userId);
         adminDashboard.showSuccess('User deleted successfully');
         this.loadUsers();
         this.loadGroups();
