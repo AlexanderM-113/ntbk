@@ -273,8 +273,8 @@ class NotebookEditor {
       ? this.escapeHtml(document.getElementById('pageContent')?.value || '')
       : (this.currentPage.elements || []).map((element) => `<div class="preview-element" style="${this.elementStyle(element)}">${this.elementMarkup(element)}</div>`).join('');
     preview.innerHTML = `<div class="preview-page" style="background:${this.currentPage.background_color || '#fff'};font-family:${this.currentPage.font_family || 'Georgia'}"><header class="page-frame-header"><div class="page-frame-title">${this.escapeHtml(this.currentPage.title)}</div>${logoUrl ? `<img src="${this.escapeHtml(logoUrl)}" alt="Page logo">` : ''}</header><div class="page-frame-rule"></div><div class="preview-content">${content}</div><footer class="page-frame-footer">${this.currentPage.requires_signature ? '<div class="signature-line"><span>Signature</span></div>' : '<div></div>'}<div class="page-meta">Page ${this.currentPage.page_number || 1} | ${new Date().toLocaleDateString()}</div></footer></div>`;
-    const content = document.getElementById('pageContent');
-    if (content) content.addEventListener('input', () => this.renderPreview());
+    const contentField = document.getElementById('pageContent');
+    if (contentField) contentField.addEventListener('input', () => this.renderPreview());
   }
 
   async addElementFromPalette(type) {
