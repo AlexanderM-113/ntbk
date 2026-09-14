@@ -225,6 +225,16 @@ body {
   color: white;
 }
 
+.badge-locked {
+  background-color: #dc3545;
+  color: white;
+}
+
+.badge-unlocked {
+  background-color: #17a2b8;
+  color: white;
+}
+
 /* Tables */
 table {
   width: 100%;
@@ -384,4 +394,36 @@ table tbody tr:hover {
   gap: 10px;
   padding-top: 15px;
   border-top: 1px solid #eee;
+}
+
+/* Notifications */
+.notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 15px 20px;
+  border-radius: 4px;
+  color: white;
+  z-index: 10000;
+  animation: slideIn 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.notification-success {
+  background-color: #28a745;
+}
+
+.notification-error {
+  background-color: #dc3545;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }

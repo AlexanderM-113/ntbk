@@ -20,6 +20,16 @@ function generateUUID() {
   });
 }
 
+// Simple password hashing using Web Crypto API compatible approach
+async function hashPassword(password) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
+}
+
 function getCorsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
@@ -46,7 +56,8 @@ function bucketForFolder(folder) {
   if (f.includes('background')) return 'BACKGROUNDS';
   if (f.includes('signature')) return 'SIGNATURES';
   if (f.includes('export') || f.includes('pdf')) return 'EXPORTS';
-  return 'ENTRY_IMAGES'; // images, entries, default
+  if (f.includes('entry') || f.includes('image')) return 'ENTRY_IMAGES';
+  return 'ENTRY_IMAGES'; // default
 }
 
 function getBucket(env, folder) {
@@ -64,6 +75,9 @@ function validateNotebookInput(data) {
   if (data.title && data.title.length > 255) {
     errors.push('Notebook title too long (max 255 characters)');
   }
+  if (data.title && !/^[a-zA-Z0-9\s\-_.,:]+$/.test(data.title)) {
+    errors.push('Notebook title contains invalid characters');
+  }
   if (data.group_id && typeof data.group_id !== 'string') {
     errors.push('Invalid group ID');
   }
@@ -79,11 +93,50 @@ function validatePageElement(element) {
     if (!element.question_text) {
       errors.push('Question text required');
     }
+    if (element.question_text && element.question_text.length > 1000) {
+      errors.push('Question text too long (max 1000 characters)');
+    }
     if (!['text', 'textarea', 'numeric'].includes(element.field_type)) {
       errors.push('Invalid field type');
     }
   }
   return errors;
+}
+
+function validateEmail(email) {
+  if (!email) return false;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+}
+
+function sanitizeString(input) {
+  if (typeof input !== 'string') return input;
+  return input.replace(/[<>]/g, '');
+}
+
+async function logAuditAction(db, actionType, performedBy, resourceType, resourceId, resourceName, details, ipAddress) {
+  try {
+    const auditId = generateUUID();
+    await db
+      .prepare(
+        `INSERT INTO audit_log (id, action_type, performed_by, resource_type, resource_id, resource_name, timestamp, details, ip_address)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .bind(
+        auditId,
+        actionType,
+        performedBy,
+        resourceType,
+        resourceId,
+        resourceName,
+        new Date().toISOString(),
+        typeof details === 'object' ? JSON.stringify(details) : details,
+        ipAddress
+      )
+      .run();
+  } catch (err) {
+    console.error('Audit log error:', err);
+  }
 }
 
 // ---------- Auth routes ----------
@@ -132,7 +185,7 @@ async function handleUserLogin(request, env, corsHeaders) {
       .run();
 
     const assignedPages = await db
-      .prepare(`SELECT page_id FROM page_assignments WHERE user_id = ? AND status = 'assigned'`)
+      .prepare(`SELECT page_id, status FROM page_assignments WHERE user_id = ?`)
       .bind(user.id)
       .all();
 
@@ -143,7 +196,10 @@ async function handleUserLogin(request, env, corsHeaders) {
         full_name: user.full_name,
         notebook_id: user.notebook_id,
         group_id: user.group_id,
-        assigned_pages: assignedPages.results.map((r) => r.page_id),
+        assigned_pages: assignedPages.results.map((r) => ({
+          page_id: r.page_id,
+          status: r.status
+        })),
       },
       200,
       corsHeaders
@@ -168,7 +224,13 @@ async function handleAdminLogin(request, env, corsHeaders) {
       .bind(username)
       .first();
 
-    if (!admin || admin.password_hash !== password) {
+    if (!admin) {
+      return error('Invalid credentials', 401, corsHeaders);
+    }
+
+    // Hash the provided password and compare with stored hash
+    const passwordHash = await hashPassword(password);
+    if (admin.password_hash !== passwordHash) {
       return error('Invalid credentials', 401, corsHeaders);
     }
 
@@ -278,6 +340,12 @@ async function handleAdminRoutes(request, env, corsHeaders) {
     if (method === 'POST' && pathParts.length === 3) {
       return createGroup(request, env, corsHeaders);
     }
+    if (method === 'PUT' && pathParts.length === 4) {
+      return updateGroup(request, env, pathParts[3], corsHeaders);
+    }
+    if (method === 'DELETE' && pathParts.length === 4) {
+      return deleteGroup(env, pathParts[3], corsHeaders);
+    }
     if (method === 'GET' && pathParts.length === 5 && pathParts[4] === 'users') {
       return getGroupUsers(env, pathParts[3], corsHeaders);
     }
@@ -290,6 +358,12 @@ async function handleAdminRoutes(request, env, corsHeaders) {
     }
     if (method === 'POST' && pathParts.length === 3) {
       return createUser(request, env, corsHeaders);
+    }
+    if (method === 'PUT' && pathParts.length === 4) {
+      return updateUser(request, env, pathParts[3], corsHeaders);
+    }
+    if (method === 'DELETE' && pathParts.length === 4) {
+      return deleteUser(env, pathParts[3], corsHeaders);
     }
     if (method === 'POST' && pathParts.length === 4 && pathParts[3] === 'assign-pages') {
       return assignPagesToUser(request, env, corsHeaders);
@@ -323,6 +397,11 @@ async function handleAdminRoutes(request, env, corsHeaders) {
     if (method === 'DELETE' && pathParts.length === 4) {
       return deleteEntry(env, pathParts[3], corsHeaders);
     }
+  }
+
+  // /api/admin/audit-log
+  if (pathParts[2] === 'audit-log' && method === 'GET' && pathParts.length === 3) {
+    return getAuditLog(env, corsHeaders);
   }
 
   return error('Not Found', 404, corsHeaders);
@@ -416,6 +495,7 @@ async function updateNotebook(request, env, notebookId, corsHeaders) {
       description: 'description',
       cover_title: 'cover_title',
       cover_subtitle: 'cover_subtitle',
+      cover_logo_id: 'cover_logo_id',
       cover_background_color: 'cover_background_color',
       cover_text_color: 'cover_text_color',
       global_font_family: 'global_font_family',
@@ -573,6 +653,10 @@ async function updatePage(request, env, pageId, corsHeaders) {
       updateFields.push('title = ?');
       updateValues.push(body.title);
     }
+    if (body.page_type !== undefined) {
+      updateFields.push('page_type = ?');
+      updateValues.push(body.page_type);
+    }
     if (body.background_color !== undefined) {
       updateFields.push('background_color = ?');
       updateValues.push(body.background_color);
@@ -580,6 +664,10 @@ async function updatePage(request, env, pageId, corsHeaders) {
     if (body.font_family !== undefined) {
       updateFields.push('font_family = ?');
       updateValues.push(body.font_family);
+    }
+    if (body.font_color !== undefined) {
+      updateFields.push('font_color = ?');
+      updateValues.push(body.font_color);
     }
     if (body.requires_signature !== undefined) {
       updateFields.push('requires_signature = ?');
@@ -779,13 +867,81 @@ async function updatePageElement(request, env, elementId, corsHeaders) {
       updateFields.push('field_type = ?');
       updateValues.push(body.field_type);
     }
+    if (body.order_position !== undefined) {
+      updateFields.push('order_position = ?');
+      updateValues.push(body.order_position);
+    }
     if (body.placeholder_text !== undefined) {
       updateFields.push('placeholder_text = ?');
       updateValues.push(body.placeholder_text);
     }
+    if (body.help_text !== undefined) {
+      updateFields.push('help_text = ?');
+      updateValues.push(body.help_text);
+    }
+    if (body.field_height !== undefined) {
+      updateFields.push('field_height = ?');
+      updateValues.push(body.field_height);
+    }
+    if (body.max_characters !== undefined) {
+      updateFields.push('max_characters = ?');
+      updateValues.push(body.max_characters);
+    }
     if (body.text_content !== undefined) {
       updateFields.push('text_content = ?');
       updateValues.push(body.text_content);
+    }
+    if (body.text_style !== undefined) {
+      updateFields.push('text_style = ?');
+      updateValues.push(body.text_style);
+    }
+    if (body.text_color !== undefined) {
+      updateFields.push('text_color = ?');
+      updateValues.push(body.text_color);
+    }
+    if (body.text_background_color !== undefined) {
+      updateFields.push('text_background_color = ?');
+      updateValues.push(body.text_background_color);
+    }
+    if (body.text_font_size !== undefined) {
+      updateFields.push('text_font_size = ?');
+      updateValues.push(body.text_font_size);
+    }
+    if (body.text_font_weight !== undefined) {
+      updateFields.push('text_font_weight = ?');
+      updateValues.push(body.text_font_weight);
+    }
+    if (body.text_alignment !== undefined) {
+      updateFields.push('text_alignment = ?');
+      updateValues.push(body.text_alignment);
+    }
+    if (body.field_background_color !== undefined) {
+      updateFields.push('field_background_color = ?');
+      updateValues.push(body.field_background_color);
+    }
+    if (body.field_text_color !== undefined) {
+      updateFields.push('field_text_color = ?');
+      updateValues.push(body.field_text_color);
+    }
+    if (body.field_font_size !== undefined) {
+      updateFields.push('field_font_size = ?');
+      updateValues.push(body.field_font_size);
+    }
+    if (body.image_background_color !== undefined) {
+      updateFields.push('image_background_color = ?');
+      updateValues.push(body.image_background_color);
+    }
+    if (body.image_border_color !== undefined) {
+      updateFields.push('image_border_color = ?');
+      updateValues.push(body.image_border_color);
+    }
+    if (body.image_label !== undefined) {
+      updateFields.push('image_label = ?');
+      updateValues.push(body.image_label);
+    }
+    if (body.max_file_size_mb !== undefined) {
+      updateFields.push('max_file_size_mb = ?');
+      updateValues.push(body.max_file_size_mb);
     }
 
     updateFields.push('updated_at = ?');
@@ -864,6 +1020,57 @@ async function getGroupUsers(env, groupId, corsHeaders) {
   }
 }
 
+async function updateGroup(request, env, groupId, corsHeaders) {
+  try {
+    const body = await request.json();
+    const { name, description, notebook_id } = body;
+
+    if (!name) {
+      return error('Group name required', 400, corsHeaders);
+    }
+
+    const db = env.DB;
+    const updateFields = [];
+    const updateValues = [];
+
+    if (name !== undefined) {
+      updateFields.push('name = ?');
+      updateValues.push(name);
+    }
+    if (description !== undefined) {
+      updateFields.push('description = ?');
+      updateValues.push(description);
+    }
+    if (notebook_id !== undefined) {
+      updateFields.push('notebook_id = ?');
+      updateValues.push(notebook_id);
+    }
+
+    updateFields.push('updated_at = ?');
+    updateValues.push(new Date().toISOString());
+    updateValues.push(groupId);
+
+    await db
+      .prepare(`UPDATE groups SET ${updateFields.join(', ')} WHERE id = ?`)
+      .bind(...updateValues)
+      .run();
+
+    return json({ success: true }, 200, corsHeaders);
+  } catch (err) {
+    return error(err.message, 500, corsHeaders);
+  }
+}
+
+async function deleteGroup(env, groupId, corsHeaders) {
+  try {
+    const db = env.DB;
+    await db.prepare('DELETE FROM groups WHERE id = ?').bind(groupId).run();
+    return json({ success: true }, 200, corsHeaders);
+  } catch (err) {
+    return error(err.message, 500, corsHeaders);
+  }
+}
+
 // ---------- User functions ----------
 
 async function getUsers(env, corsHeaders) {
@@ -883,6 +1090,16 @@ async function createUser(request, env, corsHeaders) {
 
     if (!first_name || !group_id || !notebook_id) {
       return error('Missing required fields', 400, corsHeaders);
+    }
+
+    // Validate first name
+    if (first_name.length > 100) {
+      return error('First name too long (max 100 characters)', 400, corsHeaders);
+    }
+
+    // Validate email if provided
+    if (email && !validateEmail(email)) {
+      return error('Invalid email format', 400, corsHeaders);
     }
 
     const db = env.DB;
@@ -951,6 +1168,77 @@ async function assignPagesToUser(request, env, corsHeaders) {
     }
 
     return json({ success: true, assigned_count: page_ids.length }, 200, corsHeaders);
+  } catch (err) {
+    return error(err.message, 500, corsHeaders);
+  }
+}
+
+async function updateUser(request, env, userId, corsHeaders) {
+  try {
+    const body = await request.json();
+    const { first_name, full_name, email, group_id, notebook_id } = body;
+
+    if (!first_name) {
+      return error('First name required', 400, corsHeaders);
+    }
+
+    const db = env.DB;
+    const updateFields = [];
+    const updateValues = [];
+
+    if (first_name !== undefined) {
+      updateFields.push('first_name = ?');
+      updateValues.push(first_name);
+    }
+    if (full_name !== undefined) {
+      updateFields.push('full_name = ?');
+      updateValues.push(full_name);
+    }
+    if (email !== undefined) {
+      updateFields.push('email = ?');
+      updateValues.push(email);
+    }
+    if (group_id !== undefined) {
+      updateFields.push('group_id = ?');
+      updateValues.push(group_id);
+    }
+    if (notebook_id !== undefined) {
+      updateFields.push('notebook_id = ?');
+      updateValues.push(notebook_id);
+    }
+
+    updateFields.push('updated_at = ?');
+    updateValues.push(new Date().toISOString());
+    updateValues.push(userId);
+
+    await db
+      .prepare(`UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`)
+      .bind(...updateValues)
+      .run();
+
+    return json({ success: true }, 200, corsHeaders);
+  } catch (err) {
+    return error(err.message, 500, corsHeaders);
+  }
+}
+
+async function deleteUser(env, userId, corsHeaders) {
+  try {
+    const db = env.DB;
+    await db.prepare('DELETE FROM users WHERE id = ?').bind(userId).run();
+    return json({ success: true }, 200, corsHeaders);
+  } catch (err) {
+    return error(err.message, 500, corsHeaders);
+  }
+}
+
+async function getAuditLog(env, corsHeaders) {
+  try {
+    const db = env.DB;
+    const auditLogs = await db
+      .prepare(`SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT 100`)
+      .all();
+    return json(auditLogs.results, 200, corsHeaders);
   } catch (err) {
     return error(err.message, 500, corsHeaders);
   }
@@ -1197,13 +1485,14 @@ async function initializeAdminAccount(request, env, corsHeaders) {
     }
 
     const adminId = generateUUID();
+    const passwordHash = await hashPassword(password);
 
     await db
       .prepare(
         `INSERT INTO admin_users (id, username, password_hash, email, created_at, status)
          VALUES (?, ?, ?, ?, ?, ?)`
       )
-      .bind(adminId, username, password, email, new Date().toISOString(), 'active')
+      .bind(adminId, username, passwordHash, email, new Date().toISOString(), 'active')
       .run();
 
     return json({ id: adminId, username, email }, 201, corsHeaders);
@@ -1401,6 +1690,19 @@ async function uploadFile(request, env, corsHeaders) {
       return error('No file provided', 400, corsHeaders);
     }
 
+    // Validate file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      return error('File size exceeds maximum limit of 10MB', 400, corsHeaders);
+    }
+
+    // Validate file type for images
+    if (folder && (folder.includes('image') || folder.includes('entry') || folder.includes('signature'))) {
+      if (!file.type.startsWith('image/')) {
+        return error('Only image files are allowed', 400, corsHeaders);
+      }
+    }
+
     const filename = `${folder || 'images'}/${generateUUID()}_${file.name}`;
     const buffer = await file.arrayBuffer();
 
@@ -1461,6 +1763,10 @@ async function generatePdf(request, env, corsHeaders) {
     const body = await request.json();
     const { entry_id, notebook_id, user_id } = body;
 
+    if (!entry_id || !notebook_id || !user_id) {
+      return error('Missing required parameters', 400, corsHeaders);
+    }
+
     const db = env.DB;
 
     const entry = await db.prepare(`SELECT * FROM entries WHERE id = ?`).bind(entry_id).first();
@@ -1470,6 +1776,10 @@ async function generatePdf(request, env, corsHeaders) {
 
     const user = await db.prepare(`SELECT * FROM users WHERE id = ?`).bind(entry.user_id).first();
     const notebook = await db.prepare(`SELECT * FROM notebooks WHERE id = ?`).bind(notebook_id).first();
+
+    if (!user || !notebook) {
+      return error('User or notebook not found', 404, corsHeaders);
+    }
 
     const pages = await db
       .prepare(
@@ -1489,14 +1799,44 @@ async function generatePdf(request, env, corsHeaders) {
     // Generate PDF using pdf-lib
     const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
     const pdfDoc = await PDFDocument.create();
+    const letterPageSize = [612, 792];
 
-    const coverPage = pdfDoc.addPage([612, 792]); // Letter size
+    const coverPage = pdfDoc.addPage(letterPageSize);
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
+    let coverLogo;
+    if (notebook?.cover_logo_id) {
+      try {
+        const coversBucket = env.COVERS || env.ENTRY_IMAGES;
+        const logoObject = await coversBucket.get(notebook.cover_logo_id);
+        if (logoObject) {
+          const logoBytes = await logoObject.arrayBuffer();
+          const contentType = logoObject.httpMetadata?.contentType || '';
+          coverLogo = contentType.includes('png')
+            ? await pdfDoc.embedPng(logoBytes)
+            : await pdfDoc.embedJpg(logoBytes);
+        }
+      } catch (logoError) {
+        console.error('Cover logo embedding failed:', logoError);
+      }
+    }
+
+    let titleY = 700;
+    if (coverLogo) {
+      const logoDimensions = coverLogo.scaleToFit(220, 140);
+      coverPage.drawImage(coverLogo, {
+        x: (612 - logoDimensions.width) / 2,
+        y: 500,
+        width: logoDimensions.width,
+        height: logoDimensions.height,
+      });
+      titleY = 450;
+    }
+
     coverPage.drawText(notebook?.cover_title || notebook?.title || 'Notebook', {
       x: 50,
-      y: 700,
+      y: titleY,
       size: 24,
       font: boldFont,
       color: rgb(0, 0, 0),
@@ -1505,7 +1845,7 @@ async function generatePdf(request, env, corsHeaders) {
     if (notebook?.cover_subtitle) {
       coverPage.drawText(notebook.cover_subtitle, {
         x: 50,
-        y: 660,
+        y: titleY - 40,
         size: 16,
         font: font,
         color: rgb(0, 0, 0),
@@ -1514,7 +1854,7 @@ async function generatePdf(request, env, corsHeaders) {
 
     coverPage.drawText(`Submitted by: ${user?.full_name || user?.first_name || ''}`, {
       x: 50,
-      y: 600,
+      y: titleY - 100,
       size: 12,
       font: font,
       color: rgb(0, 0, 0),
@@ -1522,21 +1862,28 @@ async function generatePdf(request, env, corsHeaders) {
 
     coverPage.drawText(`Date: ${new Date(entry.submission_date).toLocaleDateString()}`, {
       x: 50,
-      y: 580,
+      y: titleY - 120,
       size: 12,
       font: font,
       color: rgb(0, 0, 0),
     });
 
     for (const page of pages.results) {
-      const contentPage = pdfDoc.addPage([612, 792]);
+      const contentPage = pdfDoc.addPage(letterPageSize);
 
       contentPage.drawText(`Page ${page.page_number}: ${page.title}`, {
         x: 50,
-        y: 750,
+        y: 760,
         size: 18,
         font: boldFont,
         color: rgb(0, 0, 0),
+      });
+
+      contentPage.drawLine({
+        start: { x: 50, y: 735 },
+        end: { x: 562, y: 735 },
+        thickness: 1,
+        color: rgb(0.45, 0.45, 0.45),
       });
 
       if (page.page_type === 'content') {
@@ -1600,30 +1947,36 @@ async function generatePdf(request, env, corsHeaders) {
       if (page.requires_signature) {
         const signature = responses.results.find((r) => r.response_type === 'signature');
 
-        if (signature) {
-          contentPage.drawText('Signed:', {
-            x: 50,
-            y: 100,
-            size: 12,
-            font: font,
-            color: rgb(0, 0, 0),
-          });
+        contentPage.drawText(signature ? 'Signed:' : 'Signature:', {
+          x: 50,
+          y: 100,
+          size: 12,
+          font: font,
+          color: rgb(0, 0, 0),
+        });
 
-          contentPage.drawLine({
-            start: { x: 50, y: 90 },
-            end: { x: 250, y: 90 },
-            thickness: 1,
-            color: rgb(0, 0, 0),
-          });
-        }
+        contentPage.drawLine({
+          start: { x: 50, y: 88 },
+          end: { x: 250, y: 88 },
+          thickness: 1,
+          color: rgb(0, 0, 0),
+        });
       }
+
+      contentPage.drawText(`Page ${page.page_number} | ${new Date().toLocaleDateString()}`, {
+        x: 430,
+        y: 40,
+        size: 9,
+        font,
+        color: rgb(0.25, 0.25, 0.25),
+      });
     }
 
     const pdfBytes = await pdfDoc.save();
 
     const filename = `exports/${entry_id}_${Date.now()}.pdf`;
-    const bucket = getBucket(env, 'exports');
-    await bucket.put(filename, pdfBytes);
+    const exportsBucket = env.EXPORTS || env.ENTRY_IMAGES;
+    await exportsBucket.put(filename, pdfBytes);
 
     const origin = new URL(request.url).origin;
     return json(
@@ -1632,7 +1985,8 @@ async function generatePdf(request, env, corsHeaders) {
       corsHeaders
     );
   } catch (err) {
-    return error(err.message, 500, corsHeaders);
+    console.error('PDF generation error:', err);
+    return error(err.message || 'PDF generation failed', 500, corsHeaders);
   }
 }
 
@@ -1668,12 +2022,34 @@ async function sendEmailNotification(request, env, corsHeaders) {
 
     const user = await db.prepare(`SELECT * FROM users WHERE id = ?`).bind(user_id).first();
 
-    if (!user || !user.email) {
-      return error('User not found or no email', 404, corsHeaders);
+    if (!user) {
+      return error('User not found', 404, corsHeaders);
+    }
+
+    if (!user.email) {
+      // Log notification attempt but don't fail
+      const notificationId = generateUUID();
+      await db
+        .prepare(
+          `INSERT INTO email_notifications (id, user_id, email_type, subject, body, sent_at, status, error_message)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .bind(notificationId, user_id, email_type, subject, emailBody, new Date().toISOString(), 'failed', 'User has no email address')
+        .run();
+      return json({ success: false, notification_id: notificationId, warning: 'User has no email address' }, 200, corsHeaders);
     }
 
     if (!env.RESEND_API_KEY) {
-      return error('RESEND_API_KEY not configured', 500, corsHeaders);
+      // Log notification attempt but don't fail
+      const notificationId = generateUUID();
+      await db
+        .prepare(
+          `INSERT INTO email_notifications (id, user_id, email_type, subject, body, sent_at, status, error_message)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .bind(notificationId, user_id, email_type, subject, emailBody, new Date().toISOString(), 'failed', 'RESEND_API_KEY not configured')
+        .run();
+      return json({ success: false, notification_id: notificationId, warning: 'Email service not configured' }, 200, corsHeaders);
     }
 
     const resendResponse = await fetch('https://api.resend.com/emails', {
@@ -1692,7 +2068,19 @@ async function sendEmailNotification(request, env, corsHeaders) {
 
     if (!resendResponse.ok) {
       const resendError = await resendResponse.json();
-      throw new Error(resendError.message || 'Email send failed');
+      const errorMessage = resendError.message || 'Email send failed';
+      
+      // Log failed attempt
+      const notificationId = generateUUID();
+      await db
+        .prepare(
+          `INSERT INTO email_notifications (id, user_id, email_type, subject, body, sent_at, status, error_message)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .bind(notificationId, user_id, email_type, subject, emailBody, new Date().toISOString(), 'failed', errorMessage)
+        .run();
+      
+      throw new Error(errorMessage);
     }
 
     const notificationId = generateUUID();
@@ -1706,6 +2094,7 @@ async function sendEmailNotification(request, env, corsHeaders) {
 
     return json({ success: true, notification_id: notificationId }, 200, corsHeaders);
   } catch (err) {
+    console.error('Email notification error:', err);
     return error(err.message, 500, corsHeaders);
   }
 }
@@ -1729,13 +2118,16 @@ async function processReminders(env, corsHeaders) {
       .all();
 
     if (!env.RESEND_API_KEY) {
-      return error('RESEND_API_KEY not configured', 500, corsHeaders);
+      return json({ success: false, processed: 0, warning: 'Email service not configured' }, 200, corsHeaders);
     }
 
     let processed = 0;
 
     for (const assignment of pendingAssignments.results) {
-      if (!assignment.email) continue;
+      if (!assignment.email) {
+        // Skip users without email
+        continue;
+      }
 
       const subject = `Reminder: Complete ${assignment.page_title}`;
       const htmlBody = `
@@ -1790,14 +2182,34 @@ async function processReminders(env, corsHeaders) {
             .run();
 
           processed++;
+        } else {
+          // Log failed reminder
+          const resendError = await resendResponse.json();
+          await db
+            .prepare(
+              `INSERT INTO email_notifications (id, user_id, email_type, subject, body, sent_at, status, error_message)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+            )
+            .bind(
+              generateUUID(),
+              assignment.user_id,
+              'reminder',
+              subject,
+              htmlBody,
+              new Date().toISOString(),
+              'failed',
+              resendError.message || 'Email send failed'
+            )
+            .run();
         }
       } catch (e) {
-        // Silent failure for reminders - will be retried next run
+        console.error('Reminder processing error:', e);
       }
     }
 
     return json({ success: true, processed }, 200, corsHeaders);
   } catch (err) {
+    console.error('Process reminders error:', err);
     return error(err.message, 500, corsHeaders);
   }
 }
@@ -1834,8 +2246,6 @@ export default {
           200,
           corsHeaders
         );
-      } else if (path === '/api/health') {
-        return json({ success: true, status: 'ok', time: new Date().toISOString() }, 200, corsHeaders);
       } else if (path.startsWith('/api/auth')) {
         return handleAuthRoutes(request, env, corsHeaders);
       } else if (path.startsWith('/api/admin')) {

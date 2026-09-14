@@ -410,3 +410,16 @@
     width: 100%;
   }
 }
+
+/* Additional utility styles */
+.signed {
+  color: #28a745 !important;
+  font-weight: 600;
+}
+
+.image-preview {
+  display: block;
+  margin: 10px auto;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+}

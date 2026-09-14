@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notebook Writer</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      background: #f5f5f5;
+    }
+    h1 { margin-bottom: 2rem; color: #333; }
+    .buttons { display: flex; gap: 1.5rem; }
+    button {
+      padding: 1rem 2.5rem;
+      font-size: 1.1rem;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.2s;
+    }
+    button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .admin { background: #1a73e8; color: white; }
+    .user { background: #34a853; color: white; }
+  </style>
+</head>
+<body>
+  <h1>Notebook Writer</h1>
+  <div class="buttons">
+    <button class="admin" onclick="window.location.href='/admin.html'">Admin</button>
+    <button class="user" onclick="window.location.href='/user.html'">User</button>
+  </div>
+</body>
+</html>

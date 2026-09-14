@@ -47,6 +47,21 @@
     max-height: 300px;
   }
 
+  .design-workspace,
+  .cover-designer {
+    grid-template-columns: 1fr;
+  }
+
+  .design-sidebar {
+    border-right: none;
+    border-bottom: 1px solid #e5ebf0;
+    padding: 0 0 14px;
+  }
+
+  .element-palette {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
   .main-nav {
     padding: 0 10px;
   }

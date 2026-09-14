@@ -100,8 +100,7 @@ class ScheduleManager {
     
     try {
       users = await this.apiClient.getUsers();
-      // Pages would need to be fetched - for now using placeholder
-      pages = []; 
+      pages = await this.apiClient.getPages();
     } catch (error) {
       console.error('Error loading data:', error);
     }

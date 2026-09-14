@@ -23,12 +23,17 @@ class UserDashboard {
       container.innerHTML = '<div class="spinner"></div>';
 
       // Get page details for each assigned page
-      const pagePromises = this.user.assigned_pages.map(pageId => 
-        this.apiClient.getUserPage(pageId, this.user.user_id)
+      const pagePromises = this.user.assigned_pages.map(assignment => 
+        this.apiClient.getUserPage(assignment.page_id, this.user.user_id)
       );
 
       const pages = await Promise.all(pagePromises);
-      this.assignedPages = pages;
+      
+      // Add status information to pages
+      this.assignedPages = pages.map((page, index) => ({
+        ...page,
+        status: this.user.assigned_pages[index].status
+      }));
 
       this.renderPages();
       this.updateCompletionStatus();
@@ -75,10 +80,9 @@ class UserDashboard {
   }
 
   isPageCompleted(pageId) {
-    // This would need to check if the page has been submitted
-    // For now, we'll use localStorage to track completion
-    const completedPages = JSON.parse(localStorage.getItem('completed_pages') || '[]');
-    return completedPages.includes(pageId);
+    // Check the actual page status from assigned_pages
+    const page = this.assignedPages.find(p => p.id === pageId);
+    return page && page.status === 'completed';
   }
 
   markPageCompleted(pageId) {
