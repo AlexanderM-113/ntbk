@@ -1,7 +1,6 @@
 // API Configuration
-const API_BASE_URL = window.location.hostname === 'localhost' 
-  ? 'http://localhost:8787' 
-  : 'https://your-worker-url.workers.dev'; // Replace with actual Worker URL
+const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
-// API Configuration
-window.API_BASE_URL = 'https://notebook-writer.fhardy25.workers.dev';
+window.API_BASE_URL = isLocalHost
+  ? 'http://localhost:8787'
+  : 'https://notebook-writer.fhardy25.workers.dev';
